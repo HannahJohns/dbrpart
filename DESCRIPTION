@@ -1,0 +1,12 @@
+Package: dbrpart
+Type: Package
+Title: Distance Based Recursive Partitioning
+Version: 0.3.0
+Date: 2020-11-18
+Author: Hannah Johns
+Maintainer: Hannah Johns <htjohns@gmail.com>
+Description: Generalisation of Classification and Regression Trees to operate using measures of distance
+License: GPL (>= 2)
+Imports: Rcpp (>= 1.0.3), RcppParallel (>= 4.4.4)
+LinkingTo: Rcpp, RcppParallel
+SystemRequirements: GNU make
