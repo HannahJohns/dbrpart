@@ -4,8 +4,6 @@ Performs CART with distance-based partitions
 
 In its present form, the `dbrpart` package is a prototype that, while working, requires substantial cleanup. This will eventually be submitted to CRAN once this process is complete.
 
-In the meantime, this readme function provides an overview of the structure of the method's use
-
 # Missing features
 
 * At present, only supports distance-based splits. This should eventually also support splits on categorical and scalar data
