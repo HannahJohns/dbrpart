@@ -177,8 +177,6 @@ List fit_dbrpart(IntegerVector in_target_discrete,
                 )
 {
   
-  Rcout << "a";
-  
   std::srand(soma_seed);
   
   SOMA_OPTIONS = new SomaOptionsStructure();
@@ -190,8 +188,6 @@ List fit_dbrpart(IntegerVector in_target_discrete,
   SOMA_OPTIONS->nDirections = soma_nDirections;
   SOMA_OPTIONS->migrations = soma_migrations;
   SOMA_OPTIONS->minDiv = soma_minDiv;
-  
-  Rcout << "b";
   
   OPTIONS = new OptionsStructure();
   
@@ -222,8 +218,7 @@ List fit_dbrpart(IntegerVector in_target_discrete,
     idList.push_back(i);
   }
   
-  Rcout << "c";
-  
+
   ///////////////////////////////////////////////////////////////////////
   //
   //                    Target variable
@@ -262,8 +257,6 @@ List fit_dbrpart(IntegerVector in_target_discrete,
       target_distance.push_back(thisRow);
     }
   }
-  
-  Rcout << "d";
   
   
   ///////////////////////////////////////////////////////////////////////
@@ -307,8 +300,6 @@ List fit_dbrpart(IntegerVector in_target_discrete,
   }  
   
   
-  Rcout << "e";
-  
   // Pass options to a global variable to keep them all in one place
   // Matrices are dropped to std::vector<> format to play nice with
   // multithreadded code later on.
@@ -347,8 +338,8 @@ List fit_dbrpart(IntegerVector in_target_discrete,
     OPTIONS->distance_acceptable_error.push_back(in_acceptable_error[i]);
   }
   
-  Rcout << "f";
   
+
   if(OPTIONS->mode==0)
   {
     // Construct priors vectors and loss matrix
@@ -360,8 +351,6 @@ List fit_dbrpart(IntegerVector in_target_discrete,
       OPTIONS->priors_altered.push_back(0);
     }
     
-    
-    Rcout << "g";
     
     // There's something weird going on where
     // R is reusing the values stored in these vectors
@@ -376,24 +365,19 @@ List fit_dbrpart(IntegerVector in_target_discrete,
       OPTIONS->classFreq[i] = 0;
     }
     
-    Rcout << "i";
+
     
     for(int i=0;i<OPTIONS->nCategories;i++)
     {
       OPTIONS->loss.push_back(OPTIONS->priors);
     }
-    
-    Rcout << "j";
-    
+
     for(int i=0;i<OPTIONS->nObs; i++)
     {
-      Rcout << target_discrete[i];
       OPTIONS->classFreq[target_discrete[i]]++;
     }
     
-    Rcout << "k";
-    
-    
+
     for(int i=0;i<OPTIONS->nCategories;i++)
     {
       OPTIONS->priors[i] = in_priors[i];
@@ -405,7 +389,6 @@ List fit_dbrpart(IntegerVector in_target_discrete,
       }
     }
     
-    Rcout << "h";
     
     // Calculate altered priors.
     if(in_alteredPriors)
@@ -441,34 +424,20 @@ List fit_dbrpart(IntegerVector in_target_discrete,
       }
     }
     
-    Rcout << "i";
-    
-  }
-  else if(OPTIONS->mode==1)
-  {
-    
-    Rcout << "nObs " << OPTIONS->nObs << " ySize " << target_continuous.size() << std::endl;
-    
-  }
+  } // End if categorical target variable
+
+
+  OPTIONS->model_nObs = OPTIONS->nObs;
+  OPTIONS->FOLDING = false;
   
-  if(OPTIONS->trace>0)
-  {
-    Rcout << "All values passed in!" << std::endl;
-  } 
+  // Build the tree  
   
-  
-  
-  
-    
-    OPTIONS->model_nObs = OPTIONS->nObs;
-    OPTIONS->FOLDING = false;
-    
-    RcknnTree_bfs tree(target_discrete,
-                       target_continuous,
-                       target_distance,
-                       predictor_distance,
-                       predictor_distance_combinations,
-                       idList);
+  RcknnTree_bfs tree(target_discrete,
+                     target_continuous,
+                     target_distance,
+                     predictor_distance,
+                     predictor_distance_combinations,
+                     idList);
     
     
     
@@ -616,6 +585,7 @@ List fit_dbrpart(IntegerVector in_target_discrete,
         termPrediction.push_back(thisPrediction);
         termPredictionDetails.push_back(thisDetails);
       }
+      
       
       
       if(OPTIONS->trace>0)

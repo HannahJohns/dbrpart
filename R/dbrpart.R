@@ -9,6 +9,74 @@
 #' @param priors Prior distribution for categorical outcome frequency. Ignored if target is not a factor.
 #' 
 #' @param loss Loss matrix for categorical outcome frequency. Ignored if target is not a factor.
+#' @param factorList 
+#' @param numericList 
+#' @param distanceCombinations 
+#' @param alteredPriors 
+#' @param controls 
+#' @param soma.controls 
+#' 
+#' @returns A list containing the following
+#'
+#' \itemize{
+#' 
+#' If cross-validation is being used:
+#' 
+#' \item `a` - the alpha complexity thresholds for each prune
+#' \item `b` - beta, the geometric mean between successive pruning values
+#' \item `nTerm` - the number of terminal nodes at pruning step
+#' \item `model_risk` - the average error at each pruning step
+#' \item `risk` - the sum of errors at each pruning step
+#' \item `cv_risk` - the sum of errors at each pruning step under cross-validation
+#' \item `classTree` - the terminal node that each observation belongs to at each pruning step
+#' \item `prediction` - the predicted value of each observation at each pruning step (under the model)
+#' \item `details`
+#' \item `cv_prediction` - the predicted value of each observation at each pruning step (under cross-validation)
+#' \item `cv_details`
+#' 
+#' For all methods, the following:
+#' 
+#' \item `tree` -  a list containing the details of each node in the tree:
+#' \itemize{
+#'     \item `label` - the label for the node. This is currently zero indexed and should be changed.
+#'     \item `parent` - the label for the node's parent. Currently, this doesn't contain anything and should probably be removed.
+#'     \item `probability` - the probability of a random patient being in this node
+#'     \item `groupMembers` - a list of observations in this node. This is currently zero indexed and should be changed.
+#'     \item `groupSize` - the count of observations in each node.
+#'     \item `risk` - the ``risk'' of the node. This changes depending on the target:
+#'     \itemize{
+#'         \item If the target is nominal or ordinal, then it contains the 
+#'         \item If the target is scalar, then it should contain 
+#'         \item If the target is distance-based,, then
+#'     }
+#'     \item `pruneAtStep`
+#'     \item `impurity`
+#'     \item `classif`
+#'     \item `mean`
+#'     \item `terminal`
+#'     \item `alpha`
+#'     \item `splitMethod`
+#'     \item `bestSplitIndex`
+#'     \item `splitName`
+#'     \item `splitUtility`
+#'     \item `goodnessOfFit`
+#'     \item `center`
+#'     \item `radius`
+#'     \item `pVal`
+#'     \item `inChild`
+#'     \item `outChild`
+#' }
+#' 
+#' \item `y` - the target variable.
+#' \item `featureNames`
+#' \item `classNames`
+#' \item `mode`
+#' \item `controls`
+#' \item `foldList`
+#' \item `bestPruneStep`
+#' } 
+#'
+#' 
 #' 
 #' 
 #' @export
@@ -24,6 +92,9 @@ dbrpart <- function(target,
                     soma.controls=NULL
                     )
 {
+  
+  
+  
   
   # Before anything else, determine if we're trying to build:
   if("factor" %in% class(target) | "logical" %in% class(target))
@@ -186,6 +257,14 @@ dbrpart <- function(target,
     controls <- dbrpart.control()
   }
   
+  # Take stopMethod and give it a magic number to pass to c++
+  if(controls$stopMethod=="default")
+  {
+    # The default method will depend on what we're trying to fit the tree on
+    controls$stopMethod <- c("cv","cv","permutation")[mode+1]
+  }
+  
+  
   if(controls$classMethod=="mean")
   {
     if(mode == 0)
@@ -261,7 +340,7 @@ dbrpart <- function(target,
   minBucket <- controls$minBucket
   maxDepth <- controls$maxDepth
   trace <- controls$trace
-  stopMethod <- controls$stopMethod
+  stopMethod <- stopMethod <- c(cv=0,permutation=1,none=2)[controls$stopMethod]
   nSims <- controls$nSims
   signifLevel <- controls$signifLevel
   pCenters <- controls$pCenters
@@ -309,7 +388,7 @@ dbrpart <- function(target,
   foldList <- rep((1:10)-1, length.out=length(target))
   foldList <- foldList[order(runif(length(foldList)))]
 
-  out <- fit_dbrpart(in_target_discrete=target_discrete,
+  fit_out <- fit_dbrpart(in_target_discrete=target_discrete,
                      in_target_continuous=target_continuous,
                      in_target_distance=target_distance,
                      in_factorList=factorList,
@@ -342,11 +421,27 @@ dbrpart <- function(target,
                      soma_minDiv=soma_minDiv,
                      soma_seed = soma_seed)
 
+  
+  # We don't need to return everything here
+  
+  out <- fit_out
+  
+  
   out$y <- target
   out$featureNames <- featureNames
   out$featureIDs <-featureIDs
   out$classNames <- classNames
+  
+  # Magic number codes aren't particularly useful as outputs, interpret them
   out$mode <- c("classification","regression","db-regression")[mode+1]
+  out$controls <- controls
+  
+  if(out$mode=="classification")
+  {
+    out$loss=loss
+  }
+  
+  
   
   out$foldList <- foldList
   
@@ -358,14 +453,28 @@ dbrpart <- function(target,
 }
 
 
-
+#' Print a Dbrpart tree
+#'
+#' @param ... 
+#' @param x
+#' 
+#'
+#'@export
 print.Dbrpart <- function(x,...)
 {
   parms <- list(...)
   
-  if(is.null(parms$pruneShift))
+  if(is.null(parms$pruneStep))
   {
-    parms$pruneShift <- -Inf # This is currently broken lol
+    if(x$controls$stopMethod=="cv")
+    {
+      cpTable <- getCpTable(x)
+      parms$pruneStep <- cpTable$cpTable[cpTable$index,"pruneStep"]
+    }
+    else
+    {
+      parms$pruneStep <- -Inf 
+    }
   }
   
   if(is.null(parms$label))
@@ -373,15 +482,27 @@ print.Dbrpart <- function(x,...)
     parms$label <- 1
   }
   
-  cat(sprintf("%s%d) n=%d, r=%1.2f, class=%d",
-              paste(rep(" ",x$tree$depths[parms$label]),collapse=""),
-              x$tree$label[parms$label],
-              x$tree$groupSize[parms$label],
-              x$tree$risk[parms$label],
-              x$tree$classif[parms$label]
-  ))
+  if(x$mode=="classification")
+  {
+    cat(sprintf("%s%d) n=%d, r=%1.2f, class=%d",
+                paste(rep(" ",x$tree$depths[parms$label]),collapse=""),
+                x$tree$label[parms$label],
+                x$tree$groupSize[parms$label],
+                x$tree$risk[parms$label],
+                x$tree$classif[parms$label]
+    ))
+  }
+  else if(x$mode=="db-regression")
+  {
+    cat(sprintf("%s%d) n=%d, r=%1.2f",
+                paste(rep(" ",x$tree$depths[parms$label]),collapse=""),
+                x$tree$label[parms$label],
+                x$tree$groupSize[parms$label],
+                x$tree$risk[parms$label]
+    ))
+  }
   
-  if(x$tree$terminal[parms$label] | x$tree$pruneAtStep[parms$label] <= (x$bestPruneStep+parms$pruneShift))
+  if(x$tree$terminal[parms$label] | x$tree$pruneAtStep[parms$label] <= (parms$pruneStep))
   {
     cat(" *\n")
   }
@@ -393,132 +514,14 @@ print.Dbrpart <- function(x,...)
                 x$tree$radius[parms$label]
     ))
     
+    if(x$controls$stopMethod=="permutation")
+    {
+      cat(sprintf(" (p=%0.4f)", x$tree$pVal[parms$label]))
+    }
+    
     cat("\n")
     print.Dbrpart(x,label=x$tree$inChild[parms$label]+1,pruneShift = parms$pruneShift )
     print.Dbrpart(x,label=x$tree$outChild[parms$label]+1, pruneShift = parms$pruneShift )
   }
 }
 
-# 
-# print.Dbrpart <- function(x,...){
-# 
-#   parms <- list(...)
-#   
-#   
-#   if(is.null(parms$label)) # Label of null indicates start of tree
-#   {
-#     parms$label <- 0
-#   }
-#   
-#   if(is.null(parms$beta)) # If beta is not given, use best under CV
-#   {
-#     parms$beta <- min(x$b[x$cv_risk == min(x$cv_risk)])
-#   }  
-# 
-#   
-#   if(x$mode=="classification")
-#   {
-# 
-#     cat(sprintf("   %s\n",
-#                 paste(
-#                       substring(
-#                         paste(parms$classNames,"                 ",sep=""),
-#                         0,10
-#                       ),
-#                       collapse=" ")
-#                 )
-#         )
-# 
-#     cat(sprintf("%s: %s | %s\n",
-#                 x$tree$label,
-#                 paste(sprintf("%0.8f",x$tree$classProb),collapse=" "),
-#                 parms$featureNames[x$tree$bestD+1]
-#                 )
-#     )
-#     
-#   }
-#   else if(parms$mode=="regression")
-#   {
-#     cat(sprintf("%s: %s | %s\n",
-#                 x$tree$label,
-#                 sprintf("%0.2f (%0.2f)",
-#                           mean(parms$y[x$tree$groupMembers+1]),
-#                           sd(parms$y[x$tree$groupMembers+1])
-#                           ),
-#                   parms$featureNames[x$tree$bestD+1]
-#       ))
-#   }
-#   else
-#   {
-#     cat("uhhhh")
-#   }
-# 
-# 
-#     for(i in 1:length(x$tree$subtree))
-#     {
-#       cat(rep("  ",parms$depth))
-#       print.Rcknnpart(x$tree$subtree[[i]],depth=parms$depth+1,
-#                       beta=parms$beta,
-#                       featureNames=parms$featureNames,
-#                       mode=parms$mode,
-#                       y=parms$y)
-#     }
-#   }
-#   else # This function was called recursively
-#   {
-#     splitDecision <- "TERMINATE"
-#     if(!is.null(x$bestD))
-#     {
-#       splitDecision <- parms$featureNames[x$bestD+1]
-#     }
-# 
-#     cat(rep("  ",parms$depth))
-# 
-# 
-#     if(parms$mode=="classification")
-#     {
-#       cat(sprintf("%s: %s | %s\n",
-#                   x$label,
-#                   paste(sprintf("%0.3f",x$classProb),collapse=" "),
-#                   splitDecision
-#       ))
-#     }
-#     else if(parms$mode=="regression")
-#     {
-#       cat(sprintf("%s: %s | %s\n",
-#                   x$label,
-#                   sprintf("%0.2f (%0.2f)",
-#                           mean(parms$y[x$groupMembers+1]),
-#                           sd(parms$y[x$groupMembers+1])
-#                           ),
-#                   splitDecision
-#       ))
-#     }
-#     else
-#     {
-#       cat(sprintf("%s | %s\n",
-#                   x$label,
-#                   splitDecision
-#       ))
-#     }
-# 
-#     pruned <- ifelse(is.null(x$criticalAlpha),
-#                      x$terminal,
-#                      ((x$terminal) | (parms$beta>=x$criticalAlpha))
-#     )
-# 
-#     if(!pruned)
-#     {
-#       cat(rep("  ",parms$depth))
-# 
-#       for(i in 1:length(x$subtree))
-#       {
-#         print.Rcknnpart(x$subtree[[i]],depth=parms$depth+1,
-#                         beta=parms$beta,
-#                         featureNames=parms$featureNames,
-#                         mode=parms$mode,
-#                         y=parms$y)
-#       }
-#     }
-#   }
-# }

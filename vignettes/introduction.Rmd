@@ -1,0 +1,233 @@
+---
+title: "Technical Overview to dbrpart"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{my-vignette}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+
+```{r setup}
+library(dbrpart)
+```
+
+# Introduction
+
+This document provides a practical introduction to the Distance-Based CART algorithm (DB-CART), and explains how it is implemented within the `dbrpart` package. 
+
+
+# The DB-CART algorithm
+
+The DB-CART algorithm is an alternative partitioning rule for top-down recursively partitioned decision trees which operates on measures of distance.
+
+At each step of a DB-CART partition, a reference case is selected, and the node is partitioned into "In" and "Out" children based on if each member is sufficiently close to the reference case at each partition. Multiple distance measures can be supplied, where each distance measure relates to some "feature" in the dataset.
+
+Outside of this variation, DB-CART operates in the same fashion as other methods. `dbrpart` presently supports two methods for preventing overfitting of the tree. The first of these is to use cross-validation to prune a tree (following the same approach as the `rpart` package). The second uses permutation tests at each prospecitve partition to determine if the partition significantly improves the quality of the model.
+
+At present, `dbrpart` can consider either a categorical or distance-based target. A future update will add support for numeric targets.
+
+
+# Controls for `dbrpart`
+
+
+# A Basic Demo: Categorical Data
+
+To begin, we look at the most overused of all toy data sets, Fisher's Iris data.
+
+Rather than feeding in Sepal and Petal length and width as separate variables, we
+consider Sepal and Petal properties as two different features and develop measures
+of distance based on these features 
+
+```{r}
+df <- iris
+
+target <- df$Species
+
+predictors <- list(sepal=df[,c("Sepal.Length","Sepal.Width")],
+                   petal=df[,c("Petal.Length","Petal.Width")])
+
+predictors <- lapply(predictors,dist)
+```
+
+
+With our target and predictors defined, we can fit the tree:
+
+```{r}
+fit <- dbrpart(target=target, distanceList = predictors,
+               controls = dbrpart.control(trace=0))
+
+```
+
+
+Identifying the optimally pruned tree is done using the `getCpTable()` function,
+which in this case is just the full tree. 
+
+The `index` value returned by this function is the pruned tree which corresponds
+to the 1-SE version of the tree. We can use this to extract the predicted class
+from the information stored in `fit`.
+
+Note that `fit$prediction` is currently zero indexed. In a future update, this
+will be cleaned up and probably hidden behind a function.
+
+
+
+```{r}
+cpTable <- getCpTable(fit)
+
+predictedValues <- fit$classNames[fit$prediction[,cpTable$index]+1]
+
+table(predictedValues,fit$y)
+
+```
+
+By default, printing a `dbrpart` object will return the 1-SE pruned tree, assuming
+cross-validation was used. This tree looks like this:
+
+
+```{r}
+print.Dbrpart(fit)
+```
+
+In order to interpret this tree, we need to examine the centers that correspond to each partition. We can do this by looking at `fit$tree`, which contains all the details of the fitted DB-CART model.
+
+Note that at present, centers are zero indexed. This will be fixed in a later version.
+
+
+```{r}
+df[fit$tree$center[c(1,2)]+1,c("Petal.Length","Petal.Width")]
+```
+
+I.e. the first partition uses petals, with the reference case being 6.9cm long and 2.3cm wide. If a flower with a petal is similar to this (the distance is less than 4.714636), then it goes to the "In" node (labeled as Node 1). Otherwise, it goes to the "Out" node (Node 2).
+
+This process is then repeated within Node 1, again using petals, this time with a reference case of 6.1cm long and 2.5cm wide, and the threshold for similarity is 1.524328.
+
+
+This is however difficult to interpret, so data visualisation is useful to
+explore what this looks like. Let's examine the first partition:
+
+```{r}
+library(ggplot2)
+
+# Get the node membership for every record and merge this with the original dataset 
+
+nodeMembership <- rbind(
+  data.frame(node=fit$tree$label[1+1], id=fit$tree$groupMembers[[1+1]]+1),
+  data.frame(node=fit$tree$label[2+1], id=fit$tree$groupMembers[[2+1]]+1)
+)
+
+df$id <- 1:150
+
+tmpdf <- merge(df,nodeMembership)
+
+ggplot(tmpdf,aes(x=Petal.Width, y=Petal.Length,color=factor(node),shape=Species))+geom_point()
+
+```
+
+I.e. node 2 is the perfectly separable Setosa flowers.
+
+We can go further into this by filtering to just consider Node 1, and repeat
+this process.
+
+```{r}
+tmpdf <- tmpdf[which(tmpdf$node==1),colnames(df)]
+
+nodeMembership <- rbind(
+  data.frame(node=fit$tree$label[3+1], id=fit$tree$groupMembers[[3+1]]+1),
+  data.frame(node=fit$tree$label[4+1], id=fit$tree$groupMembers[[4+1]]+1)
+)
+
+tmpdf <- merge(tmpdf,nodeMembership)
+
+ggplot(tmpdf,aes(x=Petal.Width, y=Petal.Length,color=factor(node),shape=Species))+geom_point()
+
+
+```
+
+
+I.e. node 3 is versicolor while node 4 is virginia. Note the four misclassifications as the boundary in this plot.
+
+While this is a somewhat trivial example and these partitions could be just as easily explained using linear partitions (i.e. an oblique tree), similar approaches may be taken for any form of data where measures of distance may be developed, including e.g. strings of characters and longitudinal curves. In these situations, such a visualisation approach may be substantially more helpful for interpreting a DB-CART partition.
+
+
+# More complex example: 
+
+Loaloa dataset from mdhglm
+
+
+
+# Distance-based target
+
+Distance-based targets are less about prediction and more about identifying
+clusters of observations where some complex or multivariate target is explained
+by one or more predictors. In the context of DB-CART, this can be considered a
+form of supervised clustering, where each node is a cluster formed on the
+predictors in such a way that the clusters explain differences in the target.
+
+This is implemented according to:
+
+Le Meur, Nolwenn, et al. "Categorical state sequence analysis and regression tree to identify determinants of care trajectory in chronic disease: Example of end-stage renal disease." Statistical methods in medical research 28.6 (2019): 1731-1740.
+
+which uses permutation tests to evaluate each partition. It is *highly* recommended that permutation tests be used over cross-validation. Cross-validation with this method is poorly defined/documented, in development and subject to substantial change.
+
+The unfortunate side effect of this is that this method requires a sufficiently large dataset for permutation tests to show significance on the partition. Unfortunately, I've yet to find a publicly available and freely distributable datasource that's both suitable and sufficiently large.
+
+Instead, for illustrative purposes we'll focus on the `car.test.frame` dataset contained within the `rpart` package. First, we'll define a multi-criteria target variable based on the price and operating costs of the car, represented by the price and miles per gallon.
+
+```{r}
+library(rpart)
+df <- car.test.frame
+target <- dist(df[,c("Price","Mileage")])
+```
+
+We'll now try to explain differences in these criteria based on the weight, engine capacity and horsepower of each vehicle.
+
+Because we're using univariate, numeric  partitioning rules, distance-based partitions aren't particularly useful.
+However, we can make DB-CART to operate as if it were running a simple CART split by forcing it to use the most extreme
+case in a node as the reference. 
+
+
+```{r}
+
+featureList <- list(weight = dist(df$Weight), capacity = dist(df$Disp.),horsepower = dist(df$HP))
+
+```
+
+This dataset isn't particularly large, meaning that permutation testing
+is unlikely to see any difference in the partitions. For the purposes of this illustration,
+we're going to assume that any partition is significant enough by seeing the significance threshold to 1.
+
+Forcing `dbrpart` to use only the most extreme case is given by setting `pCenters = 0`.
+
+```{r}
+
+outDB <- dbrpart(target=target,
+                 distanceList = featureList,
+                 controls = dbrpart.control(
+                   trace=000,
+                   pCenters = 0,
+                   stopMethod = "permutation",
+                   signifLevel = 1
+                 ))
+
+print.Dbrpart(outDB)
+```
+
+We can calculate a measure of the quality of the tree as its pseudo-r^2 value, which is defined as the ratio between the sum of squared distances within each terminal node, divided by the sum of squared distances between all observations. We can calculate this from `outDB$tree$impurity`:
+
+```{r}
+SST <- outDB$tree$impurity[1]
+SSW <- sum(outDB$tree$impurity[outDB$tree$terminal])
+SSB <- SST - SSW
+SSB/SST
+```
+
+
+

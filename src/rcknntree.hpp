@@ -79,9 +79,6 @@ struct RcknnTree_bfs{
     // If we're running with perutation tests, what was the p-value for the split?
     double pVal;
 
-   
-    
-    
     // Labels for in/out children
     int inChild;
     int outChild;
@@ -121,6 +118,7 @@ struct RcknnTree_bfs{
       
       // Placeholder value to be calculated later.      
       this -> pruneAtStep = -1; 
+      this->classif = -1;
       
       
       
@@ -454,8 +452,9 @@ struct RcknnTree_bfs{
           
           // SST = SSW + SSB
           double SSW = this->impurity - SSB;
+          double r = SSB / this->impurity;
 
-          Rcout << " SSB " << SSB << " SSW "  << SSW <<std::endl;
+          Rcout << " SSB " << SSB << " SSW "  << SSW << " | pseudo R^2 of " << r <<std::endl;
           
           // F =  (SSB/(m-1)) / (SSW/(W-m))
           // where m is the number of groups (in our case, 2)
@@ -492,10 +491,10 @@ struct RcknnTree_bfs{
         
         // // If p-value is above significance level,
         // // then don't make the split
-        // if(pVal>OPTIONS->signifLevel)
-        // {
-        //   best.bubbleValid=0;
-        // }
+        if(pVal>OPTIONS->signifLevel)
+        {
+          this->terminal = true;
+        }
       }
       else
       {
@@ -592,6 +591,9 @@ struct RcknnTree_bfs{
       this->splitName = "";
       this->center=-1;
       this->radius = -1;
+      
+      
+      
       
       // Should we attempt a split?
       if((this->groupSize>=OPTIONS->minSplit) &      // Are the enough to attempt a split
@@ -1898,7 +1900,6 @@ struct RcknnTree_bfs{
   {
     
     IntegerVector    out_labels;
-    IntegerVector    out_parents;
     IntegerVector    out_depths;
     NumericVector    out_probability;
     List             out_groupMembers;
@@ -2003,7 +2004,6 @@ struct RcknnTree_bfs{
     // Mad haxx
     out.push_front(out_probability,"probability");
     out.push_front(out_depths,"depths");
-    out.push_front(out_parents,"parent");
     out.push_front(out_labels,"label");
 
     return out;

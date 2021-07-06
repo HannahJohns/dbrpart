@@ -10,3 +10,8 @@ License: GPL (>= 2)
 Imports: Rcpp (>= 1.0.3), RcppParallel (>= 4.4.4)
 LinkingTo: Rcpp, RcppParallel
 SystemRequirements: GNU make
+Suggests: 
+    rmarkdown,
+    knitr
+VignetteBuilder: knitr
+RoxygenNote: 7.1.1

@@ -10,9 +10,7 @@ library(tidyverse)
 library(geosphere)
 library(rpart)
 #library(hannahTools)
-
-
-
+library(dbrpart)
 
 
 ##########################################################################
@@ -29,19 +27,19 @@ rm(list=ls())
 data(BostonHousing2)
 
   
+# 
+#   straightLineDistance <- matrix(0,nrow=nrow(BostonHousing2),ncol=nrow(BostonHousing2))
+#   for(i in 1:(nrow(BostonHousing2)-1))
+#   {
+#     print(i)
+#     for(j in (i+1):nrow(BostonHousing2))
+#     {
+#       d <- distVincentyEllipsoid(BostonHousing2[i,c("lat","lon")],BostonHousing2[j,c("lat","lon")])
+#       straightLineDistance[i,j] <- d
+#       straightLineDistance[j,i] <- d
+#     }
+#   }
 
-  # straightLineDistance <- matrix(0,nrow=nrow(BostonHousing2),ncol=nrow(BostonHousing2))
-  # for(i in 1:(nrow(BostonHousing2)-1))
-  # {
-  #   print(i)
-  #   for(j in (i+1):nrow(BostonHousing2))
-  #   {
-  #     d <- distVincentyEllipsoid(BostonHousing2[i,c("lat","lon")],BostonHousing2[j,c("lat","lon")])
-  #     straightLineDistance[i,j] <- d
-  #     straightLineDistance[j,i] <- d
-  #   }
-  # }
-  # 
   
   featureList <- with(BostonHousing2,
                       list(
@@ -66,32 +64,21 @@ outDB <- dbrpart(target=value,
                    trace=999,
                    minSplit = 160,
                    minBucket = 80,
-                   pCenters = 0,
-                   stopMethod = 1
+                   pCenters = 0.1,
+                   stopMethod = "permutation",
+                   signifLevel = 1
                  ))
 
+SST <- outDB$tree$impurity[1]
+SSW <- sum(outDB$tree$impurity[outDB$tree$terminal])
+SSB <- SST - SSW
+SSB/SST
 
 
 
 
-plot(treeGrowth(out))
-
-out$betas
-out$risks
-
-treeGrowth(out)
-
-
-out$tree$risk
-sum(sapply(out$tree$subtree,function(x){x$probability*x$risk}))
-
-quasiregression_start <- Sys.time()
-
-quasiregression_stop <- Sys.time()
-quasiregression_stop-quasiregression_start
-
-plot(treeGrowth(out))
-
+print.Dbrpart(outDB)
+cluster(outDB)
 
 
 
@@ -124,19 +111,27 @@ do.call("c",do.call("c",
 
 
 # First off just test that printing is fine
-# 
 # out <- dbrpart(target=df$Species,distanceList = D_list, distanceCombinations = combinations,
                # controls = dbrpart.control(classMethod = "mode",pCenters = 0,trace = 3))
 
 
-sink("log.txt")
 out <- dbrpart(target=df$Species,distanceList = D_list,
-                controls = dbrpart.control(classMethod = "mode",pCenters = 0,trace = 3,stopMethod = 1))
-sink()
+               controls = dbrpart.control(classMethod = "mode",pCenters = 0,
+                                          trace = 3))
 
-print(out)
+print.Dbrpart(out)
+
+
+getCpTable(out)
+cluster(out)
+
+
+
+
+predQuality(out)
 
 treeGrowth(out)
+
 
 
 plot(treeGrowth(out))

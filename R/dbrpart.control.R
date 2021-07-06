@@ -15,13 +15,16 @@
 #' 
 #' @param stopMethod the method for determining when stopping occurs
 #' 
-#' @param nSims Number of permutations to perform in permutation stopping criterion
+#' @param nSims Number of permutations to perform in permutation stopping criterion. 0 for cross-validation pruning, 1 for permutation tests, 2 for no stopping 
 #' 
 #' @param signifLevel Significance level for permutation stopping criterion
+#' @param pCenters 
+#' @param combinationPower 
 #' 
-#' @param nCenters Number of bubble centers to test
-#'
-#' @param ... 
+#' @usage dbrpart.control(minSplit = 20, minBucket = round(minSplit/3), c("default","mean","median","mode"), 
+#'          maxDepth = 20, distanceAdjust=0, trace = 3, 
+#'          stopMethod = c("default","cv","permutation","none"), nSims=5000, signifLevel=0.05,
+#'          pCenters=1, combinationPower = 2)
 #'
 #' @export
 dbrpart.control <- function(minSplit = 20,
@@ -30,7 +33,7 @@ dbrpart.control <- function(minSplit = 20,
                             maxDepth = 20,
                             distanceAdjust=0,
                             trace = 3,
-                            stopMethod = 0, #c("cv","permutation","exhaust")
+                            stopMethod = "cv", #c("cv","permutation","none")
                             nSims=5000,
                             signifLevel=0.05,
                             pCenters=1,
@@ -42,8 +45,6 @@ dbrpart.control <- function(minSplit = 20,
   {
     warning("minBucket should be less than minSplit/2")
   }
-  
-  
   
   out <- list(
     minSplit=minSplit,

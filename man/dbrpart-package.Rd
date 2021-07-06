@@ -1,6 +1,5 @@
 \name{dbrpart-package}
 \alias{dbrpart-package}
-\alias{dbrpart}
 \docType{package}
 \title{
   A short title line describing what the package does

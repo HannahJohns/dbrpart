@@ -1,39 +1,47 @@
-
-getCpTable <- function(fit)
+#' Get Complexity Parameter Table for a dbrpart fit
+#'
+#' @param x an object of class \code{"Dbrpart"}
+#'
+#' @returns a list containing
+#' \itemize{
+#'     \item \code{cpTable}
+#'     \item \code{index} - the row of cpTable corresponding to the best fit using the 1-SE rule 
+#' }
+#'
+#' @export
+getCpTable <- function(x)
 {
+  if(x$controls$stopMethod!="cv") stop("Must use crossvalidation for CpTable to be meaningful!")
   
+  loss <- x$loss
+
+  stopifnot(length(x$b)==ncol(x$cv_prediction))
   
-  # Loss matrix wasn't stored oops lol
-  loss <- diag(length(unique(fit$y)))
-  loss <- abs(row(loss)-col(loss))
-  
-  stopifnot(length(fit$b)==ncol(fit$cv_prediction))
-  
-  as.data.frame(t(sapply(1:length(fit$b),function(i){
+  as.data.frame(t(sapply(1:length(x$b),function(i){
     
-    beta <- fit$b[i]
-    nTerminal <- length(unique(fit$classTree[,i]))
+    beta <- x$b[i]
+    nTerminal <- length(unique(x$classTree[,i]))
     
-    sapply(1:length(fit$y),function(j){
+    sapply(1:length(x$y),function(j){
       loss[
-        as.numeric(fit$y)[j],
-        fit$prediction[j,i]+1
+        as.numeric(x$y)[j],
+        x$prediction[j,i]+1
       ]  
     }) -> IndividualLoss
     
-    MeanLoss <- sum(IndividualLoss)/length(fit$y)
+    MeanLoss <- sum(IndividualLoss)/length(x$y)
     
-    sapply(1:length(fit$y),function(j){
+    sapply(1:length(x$y),function(j){
       loss[
-        as.numeric(fit$y)[j],
-        fit$cv_prediction[j,i]+1
+        as.numeric(x$y)[j],
+        x$cv_prediction[j,i]+1
       ]  
     }) -> xIndividualLoss
     
-    xMeanLoss <- sum(xIndividualLoss)/length(fit$y)
+    xMeanLoss <- sum(xIndividualLoss)/length(x$y)
     
-    varLoss <- sum((xIndividualLoss - xMeanLoss)^2)/length(fit$y)
-    xSE <- sqrt(varLoss/length(fit$y))
+    varLoss <- sum((xIndividualLoss - xMeanLoss)^2)/length(x$y)
+    xSE <- sqrt(varLoss/length(x$y))
     
     return(c(pruneStep = i-1,beta=beta, nTerm = nTerminal, err=MeanLoss,xerr=xMeanLoss,xse=xSE))
     
@@ -51,5 +59,4 @@ getCpTable <- function(fit)
   chosenTree <- chosenTree[which(chosenTree$nTerm == min(chosenTree$nTerm)),]
   
   return(list(cpTable = cpTable, index=chosenTree$pruneStep+1))
-  
 }
